@@ -28,7 +28,7 @@ chrome_options.add_experimental_option("prefs", prefs)
 driver = webdriver.Chrome(options=chrome_options)
 driver.get(Portal_link)
 driver.maximize_window()
-wait = WebDriverWait(driver, 20)
+wait = WebDriverWait(driver, 25)
 
 # ---------------- Login ----------------
 wait.until(EC.presence_of_element_located((By.ID, "email"))).send_keys(Login)
