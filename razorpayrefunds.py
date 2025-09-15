@@ -6,15 +6,17 @@ from selenium.common.exceptions import TimeoutException
 import time, pandas as pd, psycopg2, os, glob
 from datetime import datetime
 
+
 # ------------------- Initialize Driver -------------------
-def init_driver(start_url):
+def init_driver(start_url, download_dir):
     options = webdriver.ChromeOptions()
     options.add_argument("--start-maximized")
-    prefs = {"download.default_directory": "/Users/miniagrawal/Downloads"}
+    prefs = {"download.default_directory": download_dir}
     options.add_experimental_option("prefs", prefs)
     driver = webdriver.Chrome(options=options)
     driver.get(start_url)
     return driver
+
 
 # ------------------- Login -------------------
 def login_to_portal(driver, username, password):
@@ -22,11 +24,13 @@ def login_to_portal(driver, username, password):
     try:
         wait.until(EC.presence_of_element_located((By.XPATH, "//*[@id='textinput-8-input-9']"))).send_keys(username)
         driver.find_element(By.XPATH, "//button[@data-testid='unified-auth-continue']").click()
-        time.sleep(5)
-        password_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Enter password']")))
+
+        password_field = wait.until(
+            EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Enter password']"))
+        )
         password_field.send_keys(password)
         driver.find_element(By.XPATH, "//button[@data-analytics-name='Login']").click()
-        time.sleep(15)
+        time.sleep(10)  # wait for redirect
     except TimeoutException:
         print("Login failed - element not found.")
         driver.quit()
@@ -42,8 +46,11 @@ def login_to_portal(driver, username, password):
     except TimeoutException:
         print("Popup not found. Continuing...")
 
-def navigate_and_download_reports(driver, reports_list):
+
+# ------------------- Navigate & Download Reports -------------------
+def navigate_and_download_reports(driver, reports_list, download_dir):
     wait = WebDriverWait(driver, 20)
+    downloaded_files = {}
 
     # Click Reports tab
     print("Navigating to Reports...")
@@ -52,97 +59,68 @@ def navigate_and_download_reports(driver, reports_list):
     # Click Download Report button
     print("Clicking Download Report button...")
     wait.until(EC.element_to_be_clickable((By.XPATH, "//button[.//div[text()='Download Report']]"))).click()
-    time.sleep(5)  # wait for modal to load
+    time.sleep(3)  # allow modal to appear
 
-    for report_to_select in reports_list:
+    for report_name in reports_list:
+        if not isinstance(report_name, str):
+            raise ValueError(f"Invalid report name: {report_name}. Must be a string.")
+
         try:
-            print(f"\n=== Processing report: {report_to_select} ===")
+            print(f"\n=== Processing report: {report_name} ===")
 
             # Step 1: Click on report dropdown
-            print("Step 1: Click on report dropdown...")
             dropdown_button = wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//p[normalize-space()='Select A Report']/ancestor::button"))
             )
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", dropdown_button)
             dropdown_button.click()
 
-            # Step 2: Select the report option
-            #print(f"Step 2: Select '{report_to_select}' from dropdown...")
-
-                        # Wait for the option to be visible
-                    # Step 2: Select the report option
-            print(f"Step 2: Select '{report_to_select}' from dropdown...")
-
-                        # Wait for the option to be visible
+            # Step 2: Select the report dynamically
             report_option = wait.until(EC.element_to_be_clickable(
-                (By.XPATH, f"//button[@role='option']//p[normalize-space()='Refunds']")
+                (By.XPATH, f"//button[@role='option']//p[normalize-space()='{report_name}']")
             ))
-
-                        
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", report_option)
             report_option.click()
 
-
             # Step 3: Select Excel format
-            print("Step 3: Click on format dropdown...")
             format_dropdown = wait.until(EC.element_to_be_clickable(
                 (By.XPATH, "//p[normalize-space()='Excel, CSV or More']/ancestor::button")
             ))
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", format_dropdown)
             format_dropdown.click()
-
-            print("Step 4: Select 'Excel' report...")
             excel_option = wait.until(EC.element_to_be_clickable((By.XPATH, "//p[normalize-space()='Excel']")))
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", excel_option)
             excel_option.click()
 
-            # Step 5: Click 'What will you receive in this report?'
+             # Step 4: Click 'What will you receive in this report?'
             print("Step 5: Click 'What will you receive in this report?'...")
             what_will_you_receive = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//p[normalize-space()='What will you receive in this report?']"))
-            )
+            EC.element_to_be_clickable((By.XPATH, "//p[normalize-space()='What will you receive in this report?']"))
+        )
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", what_will_you_receive)
             what_will_you_receive.click()
 
-            # Step 6: Select duration
-            print("Step 6: Click on Select duration dropdown...")
-            duration_dropdown = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//p[normalize-space()='Select duration covered in each report']/ancestor::button"))
-            )
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", duration_dropdown)
+            # Step 5: Select duration → Yesterday
+            duration_dropdown = wait.until(EC.element_to_be_clickable(
+                (By.XPATH, "//p[normalize-space()='Select duration covered in each report']/ancestor::button")
+            ))
             duration_dropdown.click()
-
-            print("Step 7: Select 'Yesterday' duration...")
             yesterday_option = wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//button[@role='option']//p[normalize-space()='Yesterday']"))
             )
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", yesterday_option)
             yesterday_option.click()
 
-            # Step 8: Start download
-            print("Step 8: Click Start Download...")
+            # Step 6: Start download
             start_download_button = wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//div[text()='Start Download']"))
             )
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", start_download_button)
             start_download_button.click()
+            print(f"✅ {report_name} report queued for download.")
 
-            print(f"✅ {report_to_select} report queued for download.")
-
-            # Navigate to Downloads page
-            print("Navigating to Downloads page...")
+            # Step 7: Go to Downloads page
             driver.get("https://dashboard.razorpay.com/app/reports/downloads")
 
-            # Instead of a fixed 20s sleep, wait only until the first report appears
             first_report_xpath = "(//button[@aria-label='Download Report'])[1]"
             first_report = wait.until(EC.presence_of_element_located((By.XPATH, first_report_xpath)))
-
-            print("Waiting for the newest report to buffer...")
-
-            # Store initial reference (if any)
             initial_text = first_report.text.strip()
 
-            # Use WebDriverWait with a custom polling function (faster than manual loop)
             def new_report_buffered(driver):
                 try:
                     current_text = driver.find_element(By.XPATH, first_report_xpath).text.strip()
@@ -151,55 +129,52 @@ def navigate_and_download_reports(driver, reports_list):
                     return False
 
             try:
-                buffered_text = WebDriverWait(driver, 30, poll_frequency=1).until(new_report_buffered)
+                buffered_text = WebDriverWait(driver, 40, poll_frequency=1).until(new_report_buffered)
                 print("✅ New report buffered:", buffered_text)
             except TimeoutException:
                 print("⚠️ Timeout waiting for new report. Using the latest available.")
 
-            # Click the latest download button (no extra scrolling needed usually)
             latest_download_button = wait.until(EC.element_to_be_clickable((By.XPATH, first_report_xpath)))
             latest_download_button.click()
             print("Clicked on the newest report.")
-            # Wait for file in Downloads
-            download_dir = "/Users/miniagrawal/Downloads"
+
+            # Wait for file to appear in Downloads
             downloaded_file = None
-            for _ in range(60):  # wait up to 2 minutes
-                downloaded_file = get_latest_excel(download_dir, report_to_select)
+            for _ in range(60):  # up to 2 minutes
+                downloaded_file = get_latest_excel(download_dir)
                 if downloaded_file:
                     print(f"✅ File downloaded: {downloaded_file}")
                     break
                 time.sleep(2)
 
-            if not downloaded_file:
-                print(f"❌ Script failed: No {report_to_select} Excel files found in {download_dir}.")
+            if downloaded_file:
+                downloaded_files[report_name] = downloaded_file
+            else:
+                print(f"❌ No Excel file found for {report_name}.")
 
         except TimeoutException as e:
-            print(f"⚠️ Timeout while processing {report_to_select} report: {e}")
+            print(f"⚠️ Timeout while processing {report_name} report: {e}")
+
+    return downloaded_files
+
 
 # ------------------- Get Latest Excel -------------------
-def get_latest_excel(download_dir, report_type):
-    report_type = report_type.lower()
-    if report_type == "scrooge_refunds":
-        pattern = "scroogerefunds.xlsx"
-    else:
-        raise ValueError(f"Unsupported report type: {report_type}")
-    
-    list_of_files = glob.glob(f"{download_dir}/{pattern}")
+def get_latest_excel(download_dir):
+    list_of_files = glob.glob(f"{download_dir}/*.xlsx")
     if not list_of_files:
         return None
     return max(list_of_files, key=os.path.getctime)
+
 
 # ------------------- Insert Data to PostgreSQL -------------------
 def insert_data_to_db(excel_file, table_name):
     df = pd.read_excel(excel_file)
 
-    # Safely convert datetime columns
     for col in ['created_at', 'on_hold_until', 'settlement_initiated_on']:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors='coerce')  # coerce invalids to NaT
+            df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True)
 
     try:
-        # Connect to Postgres
         conn = psycopg2.connect(
             host="qa.clz6pqqb00si.ap-south-1.rds.amazonaws.com",
             database="lms",
@@ -211,36 +186,32 @@ def insert_data_to_db(excel_file, table_name):
         cursor = conn.cursor()
 
         for _, row in df.iterrows():
-            # Safely extract datetime or None
-            created_at = row['created_at'] if pd.notnull(row.get('created_at')) else None
-            on_hold_until = row['on_hold_until'] if pd.notnull(row.get('on_hold_until')) else None
-            settlement_initiated_on = row['settlement_initiated_on'] if pd.notnull(row.get('settlement_initiated_on')) else None
-
             cursor.execute(f"""
-                        INSERT INTO {table_name} (
-                            id, amount, currency, payment_id, notes, receipt,
-                            created_at, contact, email, ARN, status, upi_mode
-                        ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                        )
-                        ON CONFLICT (id) DO UPDATE
-                        SET amount = EXCLUDED.amount,
-                            currency = EXCLUDED.currency,
-                            payment_id = EXCLUDED.payment_id,
-                            notes = EXCLUDED.notes,
-                            receipt = EXCLUDED.receipt,
-                            created_at = EXCLUDED.created_at,
-                            contact = EXCLUDED.contact,
-                            email = EXCLUDED.email,
-                            ARN = EXCLUDED.ARN,
-                            status = EXCLUDED.status,
-                            upi_mode = EXCLUDED.upi_mode
-                    """, (
-                        row.get('id'), row.get('amount'), row.get('currency'), row.get('payment_id'),
-                        row.get('notes'), row.get('receipt'), created_at,
-                        row.get('contact'), row.get('email'), row.get('ARN'),
-                        row.get('status'), row.get('upi_mode')
-                    ))
+                INSERT INTO {table_name} (
+                    id, amount, currency, payment_id, notes, receipt,
+                    created_at, contact, email, ARN, status, upi_mode,inserted_at 
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                )
+                ON CONFLICT (id) DO UPDATE
+                SET amount      = EXCLUDED.amount,
+                    currency    = EXCLUDED.currency,
+                    payment_id  = EXCLUDED.payment_id,
+                    notes       = EXCLUDED.notes,
+                    receipt     = EXCLUDED.receipt,
+                    created_at  = EXCLUDED.created_at,
+                    contact     = EXCLUDED.contact,
+                    email       = EXCLUDED.email,
+                    ARN         = EXCLUDED.ARN,
+                    status      = EXCLUDED.status,
+                    upi_mode    = EXCLUDED.upi_mode,
+                    inserted_at  = NOW()
+            """, (
+                row.get('id'), row.get('amount'), row.get('currency'), row.get('payment_id'),
+                row.get('notes'), row.get('receipt'), row.get('created_at'),
+                row.get('contact'), row.get('email'), row.get('ARN'),
+                row.get('status'), row.get('upi_mode')
+            ))
 
         conn.commit()
         print(f"✅ Data upserted successfully into {table_name}!")
@@ -252,8 +223,8 @@ def insert_data_to_db(excel_file, table_name):
             cursor.close()
         if 'conn' in locals():
             conn.close()
-
-# ------------------- Main Execution -------------------
+    
+    # ------------------- Main Execution -------------------
 if __name__ == "__main__":
     portal_link = "https://dashboard.razorpay.com/app/reports/downloads"
     username = "payments@progfin.com"
@@ -262,26 +233,15 @@ if __name__ == "__main__":
 
     driver = None
     try:
-        # Start browser & login
-        driver = init_driver(portal_link)
+        driver = init_driver(portal_link, download_dir)
         login_to_portal(driver, username, password)
 
-        # Download & process Payments report
-        navigate_and_download_reports(driver, "Payments")
+        # Always a list of strings
+        reports = ["Refunds"]
+        downloaded_files = navigate_and_download_reports(driver, reports, download_dir)
 
-        # Wait until Excel appears
-        downloaded_file = None
-        for _ in range(60):
-            downloaded_file = get_latest_excel(download_dir, "scrooge_refunds")
-            if downloaded_file:
-                print(f"✅ File downloaded: {downloaded_file}")
-                break
-            time.sleep(2)
-
-        if not downloaded_file:
-            print(f"❌ No Payments Excel file found in {download_dir}.")
-        else:
-            insert_data_to_db(downloaded_file, "razorpayrefunds")
+        for report_name, file_path in downloaded_files.items():
+            insert_data_to_db(file_path, "razorpay1_refunds")
 
     except Exception as e:
         print(f"❌ Script failed: {e}")

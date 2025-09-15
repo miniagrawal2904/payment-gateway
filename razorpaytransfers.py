@@ -196,7 +196,6 @@ def insert_data_to_db(excel_file, table_name):
     cursor = conn.cursor()
 
     for _, row in df.iterrows():
-        # Safely extract datetime or None
         created_at = row['created_at'] if pd.notnull(row.get('created_at')) else None
         on_hold_until = row['on_hold_until'] if pd.notnull(row.get('on_hold_until')) else None
         settlement_initiated_on = row['settlement_initiated_on'] if pd.notnull(row.get('settlement_initiated_on')) else None
@@ -206,25 +205,10 @@ def insert_data_to_db(excel_file, table_name):
                 id, source, recipient, recipient_details, amount, currency, 
                 amount_reversed, notes, fees, on_hold, on_hold_until, 
                 created_at, recipient_settlement_id, settlement_initiated_on, 
-                settlement_utr, settlement_status, tax
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                settlement_utr, settlement_status, tax, inserted_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT (id) DO UPDATE
-            SET source = EXCLUDED.source,
-                recipient = EXCLUDED.recipient,
-                recipient_details = EXCLUDED.recipient_details,
-                amount = EXCLUDED.amount,
-                currency = EXCLUDED.currency,
-                amount_reversed = EXCLUDED.amount_reversed,
-                notes = EXCLUDED.notes,
-                fees = EXCLUDED.fees,
-                on_hold = EXCLUDED.on_hold,
-                on_hold_until = EXCLUDED.on_hold_until,
-                created_at = EXCLUDED.created_at,
-                recipient_settlement_id = EXCLUDED.recipient_settlement_id,
-                settlement_initiated_on = EXCLUDED.settlement_initiated_on,
-                settlement_utr = EXCLUDED.settlement_utr,
-                settlement_status = EXCLUDED.settlement_status,
-                tax = EXCLUDED.tax
+            SET inserted_at = NOW()
         """, (
             row.get('id'), row.get('source'), row.get('recipient'), row.get('recipient_details'),
             row.get('amount'), row.get('currency'), row.get('amount_reversed'),
@@ -233,10 +217,11 @@ def insert_data_to_db(excel_file, table_name):
             settlement_initiated_on, row.get('settlement_utr'),
             row.get('settlement_status'), row.get('tax')
         ))
+
     conn.commit()
     cursor.close()
     conn.close()
-    print(f"✅ Data inserted into {table_name}")
+    print(f"✅ Data inserted/upserted into {table_name}")
 
 # ------------------- Main Execution -------------------
 if __name__ == "__main__":

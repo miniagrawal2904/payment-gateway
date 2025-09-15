@@ -89,6 +89,7 @@ def navigate_and_download_reports(driver, report_name):
         driver.execute_script("arguments[0].click();", format_dropdown)
 
 
+        # Step 4: click on Excel format
         print("Step 4: Select 'Excel' report...")
         excel_option = wait.until(EC.element_to_be_clickable((By.XPATH, "//p[normalize-space()='Excel']")))
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", excel_option)
