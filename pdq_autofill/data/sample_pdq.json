@@ -1,0 +1,16 @@
+{
+  "fy22_turnover": 120.5,
+  "fy23_turnover": 150.75,
+  "estimated_current_fy_turnover": 160.0,
+  "ytd_turnover": 80.25,
+  "other_group_companies": [
+    {
+      "entity_name": "Acme Trading Co.",
+      "business_type": "Proprietorship",
+      "brand": "Acme",
+      "promoter_name": "John Doe",
+      "relationship_with_promoter": "Self",
+      "latest_fy_turnover_lakhs": 95.0
+    }
+  ]
+}
